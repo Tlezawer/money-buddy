@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Buddy — บันทึกรายรับรายจ่าย & ออมเงิน</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e1116">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+:root{
+  --bg:#0e1116;
+  --card:#151a23;
+  --muted:#778;
+  --text:#eef2ff;
+  --accent:#6ee7b7;
+  --accent-2:#60a5fa;
+  --danger:#fb7185;
+  --warn:#fbbf24;
+  --ok:#34d399;
+  --border:#232b3a;
+  --chip:#1e2632;
+  --shadow: 0 10px 20px rgba(0,0,0,.3);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,"Noto Sans Thai",Tahoma;
+  color:var(--text); background: radial-gradient(1200px 600px at 80% -10%, #1a2030 0%, #0e1116 60%);
+}
+.header{
+  position:sticky; top:0; z-index:10; backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(20,24,32,.85), rgba(20,24,32,.6));
+  border-bottom:1px solid var(--border);
+}
+.wrap{max-width:1100px; margin:0 auto; padding:18px}
+.brand{display:flex; align-items:center; gap:12px}
+.logo{
+  width:40px; height:40px; display:grid; place-items:center;
+  background: conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--warn), var(--accent));
+  border-radius:12px;
+  box-shadow:var(--shadow);
+  color:#0d1320; font-weight:800;
+}
+.brand h1{font-size:18px; margin:0}
+.sub{color:var(--muted); font-size:12px; margin-top:2px}
+
+.toolbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+a.tab{
+  text-decoration:none;
+  padding:10px 14px; border-radius:999px; background:var(--chip); border:1px solid var(--border);
+  cursor:pointer; color:var(--text); font-weight:600; font-size:14px; display:inline-block;
+}
+a.tab.active, a.tab[aria-current="true"]{background:linear-gradient(90deg, rgba(110,231,183,.15), rgba(96,165,250,.12)); border-color:#2f3a52}
+.section{display:none}
+.section.active{display:block}
+.section:target{display:block}
+
+.cards{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; margin:18px 0}
+.card{
+  background:linear-gradient(180deg, #151a23, #121720);
+  border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow);
+}
+.card h3{margin:0 0 4px 0; font-size:14px; color:var(--muted)}
+.kpi{font-size:24px; font-weight:800}
+.mono{font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+.kpi.ok{color:var(--ok)} .kpi.warn{color:var(--warn)} .kpi.bad{color:var(--danger)}
+
+.table-wrap{overflow:auto; border:1px solid var(--border); border-radius:12px}
+table{width:100%; border-collapse:collapse; min-width:720px}
+th,td{padding:12px; border-bottom:1px solid var(--border); text-align:left; font-size:14px}
+th{background:#0f141d; position:sticky; top:0; z-index:1}
+tr:hover td{background:#0f131b}
+
+.footer{color:var(--muted); text-align:center; padding:28px}
+.small{font-size:12px}
+
+.badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:var(--chip); border:1px solid var(--border); font-size:12px}
+.badge.ok{border-color:#1f5a48}
+.right{margin-left:auto}
+.flex{display:flex; gap:10px; align-items:center}
+hr{border:none; border-top:1px solid var(--border); margin:16px 0}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">฿</div>
+      <div>
+        <h1>Money Buddy (PWA)</h1>
+        <div class="sub">บันทึกรายรับรายจ่าย • ออมเงิน • คำนวณเวลาเก็บเงิน</div>
+      </div>
+      <div class="right flex">
+        <span id="today" class="badge"></span>
+        <button class="right" id="toggleTheme" title="สลับธีม">🌓</button>
+      </div>
+    </div>
+    <div class="toolbar" role="tablist">
+      <a class="tab active" href="#section-ledger" id="tab-ledger" role="tab" aria-controls="section-ledger" aria-selected="true">รายรับ–รายจ่าย</a>
+      <a class="tab" href="#section-savings" id="tab-savings" role="tab" aria-controls="section-savings">ออมเงิน</a>
+      <a class="tab" href="#section-goal" id="tab-goal" role="tab" aria-controls="section-goal">คำนวณการเก็บเงิน</a>
+      <a class="tab" href="#section-export" id="tab-export" role="tab" aria-controls="section-export">สำรอง/กู้คืน</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="cards">
+    <div class="card">
+      <h3>กระแสเงินสดเดือนนี้</h3>
+      <div class="kpi mono" id="kpiCashflow">฿0</div>
+      <div class="small" id="kpiCashflowNote">รายรับ - รายจ่าย เดือนปัจจุบัน</div>
+    </div>
+    <div class="card">
+      <h3>ยอดออมสะสม</h3>
+      <div class="kpi mono ok" id="kpiSavings">฿0</div>
+      <div class="small">รวมเงินฝากออมทั้งหมด</div>
+    </div>
+    <div class="card">
+      <h3>ค่าใช้จ่ายเฉลี่ย/วัน (30 วัน)</h3>
+      <div class="kpi mono warn" id="kpiDaily">฿0</div>
+      <div class="small">ช่วยควบคุมการใช้เงินประจำวัน</div>
+    </div>
+  </div>
+
+  <section id="section-ledger" class="section active" aria-labelledby="tab-ledger">
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>เพิ่มรายการ</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>วันที่</label>
+            <input type="date" id="txDate">
+          </div>
+          <div>
+            <label>ประเภท</label>
+            <select id="txType">
+              <option value="income">รายรับ</option>
+              <option value="expense">รายจ่าย</option>
+            </select>
+          </div>
+          <div>
+            <label>หมวดหมู่</label>
+            <input type="text" id="txCat" placeholder="เช่น เงินเดือน / อาหาร / เดินทาง">
+          </div>
+          <div>
+            <label>จำนวนเงิน (บาท)</label>
+            <input type="number" id="txAmount" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="grid">
+            <label>หมายเหตุ (ไม่บังคับ)</label>
+            <input type="text" id="txNote" placeholder="รายละเอียดเพิ่มเติม">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button class="primary" id="addTx">บันทึกรายการ</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ตัวกรอง</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>เดือน</label>
+            <input type="month" id="filterMonth">
+          </div>
+          <div>
+            <label>ประเภท</label>
+            <select id="filterType">
+              <option value="all">ทั้งหมด</option>
+              <option value="income">เฉพาะรายรับ</option>
+              <option value="expense">เฉพาะรายจ่าย</option>
+            </select>
+          </div>
+          <div>
+            <label>ค้นหาหมวดหมู่/หมายเหตุ</label>
+            <input type="text" id="filterQuery" placeholder="พิมพ์คำค้น…">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button id="clearFilter">ล้างตัวกรอง</button>
+          </div>
+        </div>
+        <hr>
+        <div class="flex">
+          <span class="badge">รายรับ: <span id="sumIncome">฿0</span></span>
+          <span class="badge">รายจ่าย: <span id="sumExpense">฿0</span></span>
+          <span class="badge ok">คงเหลือ: <span id="sumNet">฿0</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ทิปควบคุมการใช้เงิน</h3>
+        <ul>
+          <li>โอนเงินออมทันทีที่เงินเดือนเข้า</li>
+          <li>ทำอาหารกินเองในวันธรรมดา</li>
+          <li>ใช้บันทึกนี้ทุกวันให้เป็นนิสัย</li>
+        </ul>
+        <hr>
+        <div class="small">หมายเหตุ: ข้อมูลของคุณถูกเก็บไว้ที่ <b>เบราว์เซอร์เครื่องนี้</b> เท่านั้น</div>
+      </div>
+    </div>
+
+    <div class="table-wrap card">
+      <table id="txTable">
+        <thead>
+          <tr>
+            <th style="width:110px">วันที่</th>
+            <th style="width:90px">ประเภท</th>
+            <th>หมวดหมู่</th>
+            <th>หมายเหตุ</th>
+            <th style="width:140px">จำนวนเงิน</th>
+            <th style="width:80px">ลบ</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="section-savings" class="section" aria-labelledby="tab-savings">
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>บันทึกการออม</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>วันที่</label>
+            <input type="date" id="svDate">
+          </div>
+          <div>
+            <label>ประเภท</label>
+            <select id="svType">
+              <option value="deposit">ฝาก</option>
+              <option value="withdraw">ถอน</option>
+            </select>
+          </div>
+          <div>
+            <label>จำนวนเงิน (บาท)</label>
+            <input type="number" id="svAmount" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label>หมายเหตุ</label>
+            <input type="text" id="svNote" placeholder="เช่น เก็บเงินไปอเมริกา">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button class="primary" id="addSv">บันทึก</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>สรุปเงินออม</h3>
+        <div class="grid">
+          <div class="badge">ฝากสะสม: <span id="svIn">฿0</span></div>
+          <div class="badge">ถอนสะสม: <span id="svOut">฿0</span></div>
+          <div class="badge ok">ยอดออมคงเหลือ: <span id="svNet">฿0</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>เป้าหมายย่อย (ทางเลือก)</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>ตั้งเป้า (บาท)</label>
+            <input type="number" id="svGoal" min="0" step="1" placeholder="เช่น 50,000">
+          </div>
+          <div>
+            <label>ความคืบหน้า</label>
+            <div class="badge"><span id="svProgress">0%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap card">
+      <table id="svTable">
+        <thead>
+          <tr>
+            <th style="width:110px">วันที่</th>
+            <th style="width:90px">ประเภท</th>
+            <th>หมายเหตุ</th>
+            <th style="width:140px">จำนวนเงิน</th>
+            <th style="width:80px">ลบ</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="section-goal" class="section" aria-labelledby="tab-goal">
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>คำนวณ “ต้องใช้เวลาเท่าไหร่?”</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>เป้าหมาย (บาท)</label>
+            <input type="number" id="gcTarget" min="0" step="1" value="50000">
+          </div>
+          <div>
+            <label>ยอดที่มีแล้ว (บาท)</label>
+            <input type="number" id="gcCurrent" min="0" step="1" value="0">
+          </div>
+          <div>
+            <label>ออมต่อวัน (บาท)</label>
+            <input type="number" id="gcPerDay" min="0" step="1" value="250">
+          </div>
+          <div>
+            <label>หรือ ออมต่อเดือน (บาท)</label>
+            <input type="number" id="gcPerMonth" min="0" step="1" value="8000">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button class="primary" id="calcTime">คำนวณเวลา</button>
+          </div>
+        </div>
+        <hr>
+        <div id="gcTimeResult" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h3>คำนวณ “ต้องออมเท่าไหร่/วัน?”</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>เป้าหมาย (บาท)</label>
+            <input type="number" id="ccTarget" min="0" step="1" value="10000">
+          </div>
+          <div>
+            <label>ยอดที่มีแล้ว (บาท)</label>
+            <input type="number" id="ccCurrent" min="0" step="1" value="0">
+          </div>
+          <div>
+            <label>ระยะเวลา (วัน)</label>
+            <input type="number" id="ccDays" min="1" step="1" value="40">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button class="primary" id="calcContribution">คำนวณยอดออม/วัน</button>
+          </div>
+        </div>
+        <hr>
+        <div id="ccResult" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h3>สร้างแผน 40 วัน / 6 เดือน (อัตโนมัติ)</h3>
+        <div class="grid grid-2">
+          <div>
+            <label>เลือกแผน</label>
+            <select id="planType">
+              <option value="40">40 วัน</option>
+              <option value="180">6 เดือน (180 วัน)</option>
+            </select>
+          </div>
+          <div>
+            <label>เป้าหมายทั้งหมด (บาท)</label>
+            <input type="number" id="planTarget" min="0" step="1" value="10000">
+          </div>
+          <div class="grid">
+            <label>&nbsp;</label>
+            <button id="buildPlan">สร้างแผน</button>
+          </div>
+        </div>
+        <hr>
+        <div class="table-wrap">
+          <table id="planTable">
+            <thead>
+              <tr><th>#</th><th>ยอดที่ต้องออม (บาท)</th><th>ยอดสะสม</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="section-export" class="section" aria-labelledby="tab-export">
+    <div class="card">
+      <h3>สำรองข้อมูล & กู้คืน</h3>
+      <div class="grid grid-2">
+        <div>
+          <button id="btnExport">ดาวน์โหลดข้อมูล (JSON)</button>
+        </div>
+        <div class="grid">
+          <input type="file" id="importFile" accept=".json">
+          <button class="warn" id="btnImport">อัปโหลดและกู้คืน</button>
+        </div>
+      </div>
+      <hr>
+      <button class="danger" id="btnWipe">ล้างข้อมูลทั้งหมด</button>
+      <div class="small" style="margin-top:8px">คำเตือน: การล้างข้อมูลจะลบรายการทั้งหมดในเบราว์เซอร์นี้</div>
+    </div>
+  </section>
+
+  <div class="footer small">© <span id="year"></span> Money Buddy — PWA</div>
+</main>
+
+<script>
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js');
+  });
+}
+
+// Safe storage for iOS Private mode
+const storage = (()=>{
+  try{ const t='__mb_test__'; localStorage.setItem(t,'1'); localStorage.removeItem(t); return localStorage; }
+  catch(e){ const mem={}; return {getItem:k=>mem[k]||null, setItem:(k,v)=>mem[k]=String(v), removeItem:k=>delete mem[k]}; }
+})();
+
+const fmt = new Intl.NumberFormat('th-TH', { style:'currency', currency:'THB', maximumFractionDigits: 0 });
+const fmt2 = new Intl.NumberFormat('th-TH', { style:'currency', currency:'THB'});
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+function todayStr(){
+  const d = new Date();
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function monthStr(date){
+  const d = date? new Date(date): new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+const LS_KEYS = { tx:'mb_tx', sv:'mb_sv', theme:'mb_theme' };
+let tx = JSON.parse(storage.getItem(LS_KEYS.tx) || '[]');
+let sv = JSON.parse(storage.getItem(LS_KEYS.sv) || '[]');
+
+function applyTheme(){
+  const t = storage.getItem(LS_KEYS.theme) || 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+}
+document.getElementById('toggleTheme').addEventListener('click', ()=>{
+  const current = storage.getItem(LS_KEYS.theme) || 'dark';
+  storage.setItem(LS_KEYS.theme, current==='dark'?'light':'dark');
+  applyTheme();
+});
+applyTheme();
+
+// Header
+document.getElementById('today').textContent = new Date().toLocaleDateString('th-TH', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+document.getElementById('year').textContent = new Date().getFullYear();
+
+// Hash tabs active state
+function syncTabActive(){
+  const id = location.hash || '#section-ledger';
+  $$('.section').forEach(s=> s.classList.remove('active'));
+  const tgt = document.querySelector(id);
+  if(tgt) tgt.classList.add('active');
+
+  $$('.tab').forEach(a=> a.removeAttribute('aria-current'));
+  const tab = document.querySelector(`a.tab[href="${id}"]`);
+  if(tab) tab.setAttribute('aria-current','true');
+}
+window.addEventListener('hashchange', syncTabActive);
+syncTabActive();
+
+// Ledger
+document.getElementById('txDate').value = todayStr();
+document.getElementById('filterMonth').value = monthStr();
+
+function renderTx(){
+  const month = document.getElementById('filterMonth').value;
+  const type = document.getElementById('filterType').value;
+  const q = (document.getElementById('filterQuery').value || '').toLowerCase();
+
+  const tbody = document.querySelector('#txTable tbody');
+  tbody.innerHTML = '';
+  let income=0, expense=0;
+
+  tx
+  .filter(item=>{
+    const keepMonth = (item.date||'').startsWith(month);
+    const keepType = type==='all' || item.type===type;
+    const text = (item.cat||'') + ' ' + (item.note||'');
+    const keepQuery = !q || text.toLowerCase().includes(q);
+    return keepMonth && keepType && keepQuery;
+  })
+  .sort((a,b)=> (a.date||'').localeCompare(b.date||''))
+  .forEach((item)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.date||'-'}</td>
+      <td><span class="badge ${item.type==='income'?'ok':''}">${item.type==='income'?'รายรับ':'รายจ่าย'}</span></td>
+      <td>${item.cat||'-'}</td>
+      <td>${item.note||'-'}</td>
+      <td class="mono">${fmt2.format(item.amount||0)}</td>
+      <td><button class="danger" data-del="${item.id}">ลบ</button></td>
+    `;
+    tbody.appendChild(tr);
+    if(item.type==='income') income+=(item.amount||0); else expense+=(item.amount||0);
+  });
+
+  document.getElementById('sumIncome').textContent = fmt2.format(income);
+  document.getElementById('sumExpense').textContent = fmt2.format(expense);
+  document.getElementById('sumNet').textContent = fmt2.format(income - expense);
+  document.getElementById('kpiCashflow').textContent = fmt2.format(income - expense);
+
+  const now = new Date();
+  const last30 = tx
+    .filter(it=> it.type==='expense')
+    .filter(it=>{
+      const d = new Date(it.date);
+      return (now - d) / (1000*60*60*24) <= 30;
+    })
+    .reduce((s,it)=> s+(it.amount||0), 0);
+  document.getElementById('kpiDaily').textContent = fmt2.format(last30/30);
+}
+['change','keyup'].forEach(ev=>{
+  document.getElementById('filterMonth').addEventListener(ev, renderTx);
+  document.getElementById('filterType').addEventListener(ev, renderTx);
+  document.getElementById('filterQuery').addEventListener(ev, renderTx);
+});
+document.getElementById('clearFilter').addEventListener('click', ()=>{
+  document.getElementById('filterType').value='all';
+  document.getElementById('filterQuery').value='';
+  document.getElementById('filterMonth').value = monthStr();
+  renderTx();
+});
+
+document.getElementById('addTx').addEventListener('click', ()=>{
+  const date = document.getElementById('txDate').value || todayStr();
+  const type = document.getElementById('txType').value;
+  const cat = document.getElementById('txCat').value.trim() || (type==='income'?'ทั่วไป':'ทั่วไป');
+  const amount = Number(document.getElementById('txAmount').value);
+  const note = document.getElementById('txNote').value.trim();
+  if(!amount || amount<=0){ alert('กรอกจำนวนเงินให้ถูกต้อง'); return; }
+  const item = { id:(crypto.randomUUID && crypto.randomUUID()) || String(Date.now()), date, type, cat, amount, note };
+  tx.push(item);
+  storage.setItem(LS_KEYS.tx, JSON.stringify(tx));
+  document.getElementById('txAmount').value=''; document.getElementById('txNote').value='';
+  renderTx();
+});
+
+document.querySelector('#txTable').addEventListener('click', (e)=>{
+  const id = e.target?.dataset?.del;
+  if(!id) return;
+  if(confirm('ลบรายการนี้ใช่ไหม?')){
+    tx = tx.filter(i=> i.id!==id);
+    storage.setItem(LS_KEYS.tx, JSON.stringify(tx));
+    renderTx();
+  }
+});
+
+// Savings
+document.getElementById('svDate').value = todayStr();
+function renderSv(){
+  const tbody = document.querySelector('#svTable tbody');
+  tbody.innerHTML='';
+  let dep=0, wit=0;
+  sv.sort((a,b)=> (a.date||'').localeCompare(b.date||''))
+    .forEach(item=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${item.date||'-'}</td>
+        <td><span class="badge ${item.type==='deposit'?'ok':'warn'}">${item.type==='deposit'?'ฝาก':'ถอน'}</span></td>
+        <td>${item.note||'-'}</td>
+        <td class="mono">${fmt2.format(item.amount||0)}</td>
+        <td><button class="danger" data-del="${item.id}">ลบ</button></td>`;
+      tbody.appendChild(tr);
+      if(item.type==='deposit') dep+=(item.amount||0); else wit+=(item.amount||0);
+    });
+  const net = dep - wit;
+  document.getElementById('svIn').textContent = fmt2.format(dep);
+  document.getElementById('svOut').textContent = fmt2.format(wit);
+  document.getElementById('svNet').textContent = fmt2.format(net);
+  document.getElementById('kpiSavings').textContent = fmt2.format(net);
+
+  const goal = Number(document.getElementById('svGoal').value||0);
+  document.getElementById('svProgress').textContent = goal>0 ? (Math.min(100, Math.round(net/goal*100)) + '%') : '0%';
+}
+document.getElementById('addSv').addEventListener('click', ()=>{
+  const date = document.getElementById('svDate').value || todayStr();
+  const type = document.getElementById('svType').value;
+  const amount = Number(document.getElementById('svAmount').value);
+  const note = document.getElementById('svNote').value.trim();
+  if(!amount || amount<=0){ alert('กรอกจำนวนเงินให้ถูกต้อง'); return; }
+  sv.push({id:(crypto.randomUUID && crypto.randomUUID()) || String(Date.now()), date, type, amount, note});
+  storage.setItem(LS_KEYS.sv, JSON.stringify(sv));
+  document.getElementById('svAmount').value=''; document.getElementById('svNote').value='';
+  renderSv();
+});
+document.querySelector('#svTable').addEventListener('click',(e)=>{
+  const id = e.target?.dataset?.del;
+  if(!id) return;
+  if(confirm('ลบข้อมูลนี้ใช่ไหม?')){
+    sv = sv.filter(i=> i.id!==id);
+    storage.setItem(LS_KEYS.sv, JSON.stringify(sv));
+    renderSv();
+  }
+});
+document.getElementById('svGoal').addEventListener('keyup', renderSv);
+
+// Goal Calculators
+document.getElementById('calcTime').addEventListener('click', ()=>{
+  const target = Number(document.getElementById('gcTarget').value||0);
+  const current = Number(document.getElementById('gcCurrent').value||0);
+  const perDay = Number(document.getElementById('gcPerDay').value||0);
+  const perMonth = Number(document.getElementById('gcPerMonth').value||0);
+
+  const remaining = Math.max(0, target - current);
+  let daysViaDaily = perDay>0 ? Math.ceil(remaining / perDay) : null;
+  let daysViaMonthly = perMonth>0 ? Math.ceil(remaining / (perMonth/30)) : null;
+
+  let out = '';
+  out += `<div>ต้องเก็บเพิ่มอีก <b>${new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'}).format(remaining)}</b></div>`;
+  if(daysViaDaily!==null) out += `<div>ถ้าออมวันละ <b>${new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'}).format(perDay)}</b> จะใช้เวลาประมาณ <b>${daysViaDaily}</b> วัน</div>`;
+  if(daysViaMonthly!==null) out += `<div>ถ้าออมเดือนละ <b>${new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'}).format(perMonth)}</b> จะใช้เวลาประมาณ <b>${daysViaMonthly}</b> วัน (~ ${Math.ceil(daysViaMonthly/30)} เดือน)</div>`;
+  document.getElementById('gcTimeResult').innerHTML = out;
+});
+
+document.getElementById('calcContribution').addEventListener('click', ()=>{
+  const target = Number(document.getElementById('ccTarget').value||0);
+  const current = Number(document.getElementById('ccCurrent').value||0);
+  const days = Math.max(1, Number(document.getElementById('ccDays').value||1));
+  const remaining = Math.max(0, target - current);
+  const perDay = remaining / days;
+  const perWeek = perDay * 7;
+  const perMonth = perDay * 30;
+  const nf = new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'});
+  document.getElementById('ccResult').innerHTML = `
+    ต้องออมเฉลี่ย <b>${nf.format(perDay)}</b> ต่อวัน,
+    หรือ <b>${nf.format(perWeek)}</b> ต่อสัปดาห์,
+    หรือ <b>${nf.format(perMonth)}</b> ต่อเดือน เพื่อให้ถึง <b>${nf.format(target)}</b> ใน <b>${days}</b> วัน
+  `;
+});
+
+document.getElementById('buildPlan').addEventListener('click', ()=>{
+  const days = Number(document.getElementById('planType').value);
+  const target = Number(document.getElementById('planTarget').value||0);
+  const per = Math.ceil(target / days);
+  let acc = 0;
+  const tbody = document.querySelector('#planTable tbody');
+  tbody.innerHTML = '';
+  for(let i=1;i<=days;i++){
+    const need = (i<days) ? per : (target - per*(days-1));
+    acc += need;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i}</td><td class="mono">${new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'}).format(need)}</td><td class="mono">${new Intl.NumberFormat('th-TH', {style:'currency', currency:'THB'}).format(acc)}</td>`;
+    tbody.appendChild(tr);
+  }
+});
+
+// Init
+renderTx();
+renderSv();
+</script>
+</body>
+</html>
